@@ -1,18 +1,22 @@
+require("dotenv").config();
 const bodyParser = require("body-parser");
+const compression = require("compression");
 const mongoose = require("mongoose");
+const jwt = require("jsonwebtoken");
 const express = require("express");
+const bcrypt = require("bcrypt");
+const saltRounds = 10;
 
 const app = express();
 
-const port = 4000;
-const JWT_SECRET = "BJIOBiuosba93920";
-
 const User = require("./schema/userSchema.js");
 
-mongoose.connect(
-  "mongodb+srv://kiwi28:parola123test@cluster0.kcnfo.mongodb.net/myFirstDatabase?retryWrites=true&w=majority",
-  { useNewUrlParser: true, useUnifiedTopology: true }
-);
+app.use(compression());
+
+mongoose.connect(process.env.MONGO_URL, {
+  useNewUrlParser: true,
+  useUnifiedTopology: true,
+});
 
 const db = mongoose.connection;
 db.on("error", console.error.bind(console, "connection error:"));
@@ -21,55 +25,78 @@ db.once("open", function () {
 });
 
 app.use(bodyParser.json());
-// const jsonParser = bodyParser.json();
 
 app.get("/", (req, res) => {
-  res.send("Hello World!");
+  res.send("123 123");
 });
 
-app.get("/auth", (req, res) => {
-  res.send("de pae auth dasd asd asd ");
+app.post("/auth", (req, res) => {
+  User.findOne({
+    email: req.body.email,
+  }).then((userFromDB) => {
+    bcrypt.compare(req.body.password, userFromDB.password, (err, result) => {
+      if (result) {
+        const accessToken = jwt.sign(
+          {
+            email: userFromDB.email,
+            firstName: userFromDB.firstName,
+            lastName: userFromDB.lastName,
+          },
+          process.env.JWT_SECRET
+        );
+
+        res.json({
+          accessToken,
+        });
+      }
+      if (err) return res.sendStatus(400);
+    });
+  });
 });
 
 app.post("/register", (req, res) => {
-  // console.log(req.body);
   if (
     !req.body.email ||
     !req.body.password ||
     !req.body.firstName ||
     !req.body.lastName
   ) {
-    return res.status(400).json({ message: "All fields are mandatory" });
+    return res.status(400).json({ message: "All fields are mandatory." });
   }
 
-  if (users.findIndex((el) => el.email === req.body.email) >= 0) {
-    return res.status(400).json({ message: "This email is not available" });
-  }
+  User.findOne({ email: req.body.email })
+    .then((response) => {
+      if (response) {
+        return res
+          .status(400)
+          .json({ message: "This email is already in use." });
+      } else {
+        const newUser = new User({
+          email: req.body.email,
+          firstName: req.body.firstName,
+          lastName: req.body.lastName,
+          password: req.body.password,
+        });
 
-  const newUser = new User({
-    email: req.body.email,
-    firstName: req.body.firstName,
-    lastName: req.body.lastName,
-    password: req.body.password,
-  });
+        const salt = bcrypt.genSaltSync(saltRounds);
 
-  newUser.save();
-
-  console.log(newUser);
-
-  res.send(newUser);
+        newUser.password = bcrypt.hashSync(newUser.password, salt);
+        console.log(newUser);
+        newUser.save().then((savedUser) => {
+          return res.send({
+            email: savedUser.email,
+            firstName: savedUser.firstName,
+            lastName: savedUser.lastName,
+          });
+        });
+      }
+    })
+    .catch((err) => {
+      console.log(err);
+      return res.status(400).json({ message: err });
+    });
 });
 
-app.listen(port, () => {
-  console.log(`Example app listening at http://localhost:${port}`);
+app.listen(process.env.PORT, () => {
+  console.log(`Example app listening at http://localhost:${process.env.PORT}`);
 });
-
-const users = [
-  {
-    id: 1,
-    email: "user@user.com",
-    firstName: "Kiwi",
-    lastName: "Alex",
-    password: "qwerty",
-  },
-];
