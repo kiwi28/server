@@ -5,6 +5,7 @@ const mongoose = require("mongoose");
 const jwt = require("jsonwebtoken");
 const express = require("express");
 const bcrypt = require("bcrypt");
+const cors = require("cors");
 const saltRounds = 10;
 
 const app = express();
@@ -12,6 +13,7 @@ const app = express();
 const User = require("./schema/userSchema.js");
 
 app.use(compression());
+app.use(cors());
 
 mongoose.connect(process.env.MONGO_URL, {
   useNewUrlParser: true,
